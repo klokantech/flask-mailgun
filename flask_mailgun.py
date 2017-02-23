@@ -2,7 +2,6 @@ import requests
 
 from flask import current_app
 from html2text import html2text
-from pprint import pformat
 
 
 class Mailgun:
@@ -44,7 +43,10 @@ class Mailgun:
         if 'html' in data and 'text' not in data:
             data['text'] = html2text(data['html'])
         if self.debug:
-            current_app.logger.debug('Mailgun send:\n%s', pformat(data))
+            current_app.logger.debug(
+                'Mailgun send:\nFrom: %s\nTo: %s\nSubject: %s\n\n%s\n\n--\n\n%s',
+                data['from'], data['to'], data['subject'],
+                data.get('text'), data.get('html'))
             return
         url = 'https://api.mailgun.net/v3/{}/messages'.format(self.domain)
         response = requests.post(url, auth=('api', self.key), data=data)

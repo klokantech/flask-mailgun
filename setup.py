@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='Flask-Mailgun',
-    version='1.0',
+    version='1.1',
     description='Mailgun integration for Flask',
     py_modules=['flask_mailgun'],
     install_requires=[

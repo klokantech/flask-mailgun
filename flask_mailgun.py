@@ -1,7 +1,34 @@
+import logging
 import requests
 
 from flask import current_app
 from html2text import html2text
+
+
+debug_template = """\
+Mailgun send
+
+From:       %(from)s
+To:         %(to)s
+Subject:    %(subject)s
+
+%(text)s
+
+----------------------------------------
+
+%(html)s
+"""
+
+
+logging_template = """\
+Severity:   %(levelname)s
+Location:   %(pathname)s:%(lineno)d
+Module:     %(module)s
+Function:   %(funcName)s
+Time:       %(asctime)s
+
+%(message)s
+"""
 
 
 class Mailgun:
@@ -16,14 +43,29 @@ class Mailgun:
             self.init_app(app)
 
     def init_app(self, app):
-        """Inititialize the extension. There are two configuration options,
-        MAILGUN_DOMAIN and MAILGUN_KEY. They are not necessary in debug mode.
+        """Inititialize the extension.
+
+        There are two configuration options for authentization:
+        MAILGUN_DOMAIN and MAILGUN_KEY. They are not necessary
+        in debug mode.
+
+        The extension can also setup a custom logging handler that
+        sends emails for events at level ERROR and above. Configure
+        the MAILGUN_LOGGING_RECIPIENT configuration option to enable
+        this, it is an email address where messages will be sent.
+        Optionally, you can configure the sender address as well
+        with the MAILGUN_LOGGING_SENDER option.
         """
         app.extensions['mailgun'] = self
         self.debug = app.debug
         if not self.debug:
             self.domain = app.config['MAILGUN_DOMAIN']
             self.key = app.config['MAILGUN_KEY']
+        logging_recipient = app.config.get('MAILGUN_LOGGING_RECIPIENT')
+        if logging_recipient is not None:
+            logging_sender = app.config.get('MAILGUN_LOGGING_SENDER')
+            handler = LoggingHandler(self, logging_sender, logging_recipient)
+            app.logger.addHandler(handler)
 
     def send(self, **data):
         """Send email. It will not actually send emails in debug mode,
@@ -43,19 +85,42 @@ class Mailgun:
         if 'html' in data and 'text' not in data:
             data['text'] = html2text(data['html'])
         if self.debug:
-            current_app.logger.debug(
-                'Mailgun send:\nFrom: %s\nTo: %s\nSubject: %s\n\n%s\n\n--\n\n%s',
-                data['from'], data['to'], data['subject'],
-                data.get('text'), data.get('html'))
+            data.setdefault('html', '(no HTML)')
+            current_app.logger.debug(debug_template, data)
             return
         url = 'https://api.mailgun.net/v3/{}/messages'.format(self.domain)
         response = requests.post(url, auth=('api', self.key), data=data)
         if response.status_code != 200:
-            raise MailgunAPIError(response)
+            raise APIError(response)
         current_app.logger.info('Mailgun sent to %s', data['to'])
 
 
-class MailgunAPIError(Exception):
+class LoggingHandler(logging.Handler):
+
+    """Logging handler that sends records via Mailgun."""
+
+    def __init__(self, mailgun, sender, recipient):
+        super().__init__(level=logging.ERROR)
+        self.setFormatter(logging.Formatter(logging_template))
+        self.mailgun = mailgun
+        self.sender = sender
+        self.recipient = recipient
+        self.messages = []
+
+    def emit(self, record):
+        if record.exc_info is not None:
+            __, exc, __ = record.exc_info
+            subject = 'EXCEPTION: {}'.format(exc)
+        else:
+            subject = '{}: {}:{}'.format(record.levelname, record.pathname, record.lineno)  # noqa
+        self.mailgun.send(
+            from_=self.sender,
+            to=self.recipient,
+            subject=subject,
+            text=self.format(record))
+
+
+class APIError(Exception):
 
     """Error response from the Mailgun server."""
 

@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from flask import current_app
+from flask import current_app, render_template_string
 from html2text import html2text
 
 
@@ -28,6 +28,24 @@ Function:   %(funcName)s
 Time:       %(asctime)s
 
 %(message)s
+"""
+
+
+error_template = """\
+{% autoescape false -%}
+{{ message }}
+
+{{ request.method }} {{ request.url }}
+{% for key, val in request.headers.items()|sort -%}
+{{ key }}: {{ val }}
+{% endfor -%}
+{% for key, val in session.items()|sort -%}
+Session: {{ key }}={{ val }}
+{% endfor %}
+{% for key, val in request.form.items()|sort -%}
+{{ key }}={{ val }}
+{% endfor %}
+{% endautoescape %}
 """
 
 
@@ -110,14 +128,16 @@ class LoggingHandler(logging.Handler):
     def emit(self, record):
         if record.exc_info is not None:
             __, exc, __ = record.exc_info
-            subject = 'EXCEPTION: {}'.format(exc)
+            subject = 'ERROR: {}'.format(exc)
         else:
             subject = '{}: {}:{}'.format(record.levelname, record.pathname, record.lineno)  # noqa
+        message = self.format(record)
+        text = render_template_string(error_template, message=message)
         self.mailgun.send(
             from_=self.sender,
             to=self.recipient,
             subject=subject,
-            text=self.format(record))
+            text=text)
 
 
 class APIError(Exception):

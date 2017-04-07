@@ -76,9 +76,11 @@ class Mailgun:
         """
         app.extensions['mailgun'] = self
         self.debug = app.debug
-        if not self.debug:
-            self.domain = app.config['MAILGUN_DOMAIN']
-            self.key = app.config['MAILGUN_KEY']
+        if self.debug:
+            app.config.setdefault('MAILGUN_DOMAIN', 'TESTING')
+            app.config.setdefault('MAILGUN_KEY', '')
+        self.domain = app.config['MAILGUN_DOMAIN']
+        self.key = app.config['MAILGUN_KEY']
         logging_recipient = app.config.get('MAILGUN_LOGGING_RECIPIENT')
         if logging_recipient is not None:
             logging_sender = app.config.get('MAILGUN_LOGGING_SENDER')

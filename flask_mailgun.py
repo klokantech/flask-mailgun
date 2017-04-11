@@ -83,7 +83,7 @@ class Mailgun(object):
     def init_app(self, app):
         """Inititialize the extension.
 
-        There are two configuration options for authentication:
+        There are two configuration options for authentization:
         MAILGUN_DOMAIN and MAILGUN_KEY. They are not necessary
         in debug mode.
 

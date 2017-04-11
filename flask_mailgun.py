@@ -58,13 +58,17 @@ Session: {{ key }}={{ val }}
 """
 
 
-default_api_error_template = (
-    'Mailgun API {method} at {url} failed '
-    'with status code {status_code}:\n{text}')
-
-
 class Mailgun(object):
     """Mailgun integration for Flask."""
+
+    debug_template = default_debug_template
+    logging_template = default_logging_template
+
+    error_subject_withexcinfo_template = (
+        default_error_subject_withexcinfo_template)
+    error_subject_withoutexcinfo_template = (
+        default_error_subject_withoutexcinfo_template)
+    error_template = default_error_template
 
     def __init__(self, app=None):
         self.debug = None
@@ -72,14 +76,6 @@ class Mailgun(object):
         self.key = None
 
         self.api_url_template = None
-        self.debug_template = None
-        self.logging_template = None
-
-        self.error_subject_withexcinfo_template = None
-        self.error_subject_withoutexcinfo_template = None
-        self.error_template = None
-
-        self.api_error_template = None
 
         if app is not None:
             self.init_app(app)
@@ -98,16 +94,18 @@ class Mailgun(object):
         Optionally, you can configure the sender address as well
         with the MAILGUN_LOGGING_SENDER option.
 
-        There are also several template strings that can be optionally
-        configured. If not configured, they fall back to default
-        values. These options are:
-          - MAILGUN_API_URL_TEMPLATE
-          - MAILGUN_DEBUG_TEMPLATE
-          - MAILGUN_LOGGING_TEMPLATE
-          - MAILGUN_ERROR_SUBJECT_WITHEXCINFO_TEMPLATE
-          - MAILGUN_ERROR_SUBJECT_WITHOUTEXCINFO_TEMPLATE
-          - MAILGUN_ERROR_TEMPLATE
-          - MAILGUN_API_ERROR_TEMPLATE
+        If for some reason you need to override the Mailgun API URL,
+        you can do so by configuring the MAILGUN_API_URL_TEMPLATE
+        option.
+
+        You can configure the debug, logging, and error templates
+        by subclassing this class, and overriding any of these
+        class attributes:
+          - debug_template
+          - logging_template
+          - error_subject_withexcinfo_template
+          - error_subject_withoutexcinfo_template
+          - error_template
         """
         app.extensions['mailgun'] = self
         self.debug = app.debug
@@ -116,44 +114,11 @@ class Mailgun(object):
         self.key = app.config['MAILGUN_KEY']
 
         self.api_url_template = app.config.get(
-            'MAILGUN_API_URL_TEMPLATE')
-        if self.api_url_template is None:
-            self.api_url_template = default_api_url_template
+            'MAILGUN_API_URL_TEMPLATE', default_api_url_template)
 
         if self.debug:
             app.config.setdefault('MAILGUN_DOMAIN', 'TESTING')
             app.config.setdefault('MAILGUN_KEY', '')
-
-            self.debug_template = app.config.get('MAILGUN_DEBUG_TEMPLATE')
-            if self.debug_template is None:
-                self.debug_template = default_debug_template
-
-        self.logging_template = app.config.get(
-            'MAILGUN_LOGGING_TEMPLATE')
-        if self.logging_template is None:
-            self.logging_template = default_logging_template
-
-        self.error_subject_withexcinfo_template = app.config.get(
-            'MAILGUN_ERROR_SUBJECT_WITHEXCINFO_TEMPLATE')
-        if self.error_subject_withexcinfo_template is None:
-            self.error_subject_withexcinfo_template = (
-                default_error_subject_withexcinfo_template)
-
-        self.error_subject_withoutexcinfo_template = app.config.get(
-            'MAILGUN_ERROR_SUBJECT_WITHOUTEXCINFO_TEMPLATE')
-        if self.error_subject_withoutexcinfo_template is None:
-            self.error_subject_withoutexcinfo_template = (
-                default_error_subject_withoutexcinfo_template)
-
-        self.error_template = app.config.get(
-            'MAILGUN_ERROR_TEMPLATE')
-        if self.error_template is None:
-            self.error_template = default_error_template
-
-        self.api_error_template = app.config.get(
-            'MAILGUN_API_ERROR_TEMPLATE')
-        if self.api_error_template is None:
-            self.api_error_template = default_api_error_template
 
         logging_recipient = app.config.get('MAILGUN_LOGGING_RECIPIENT')
 
@@ -194,10 +159,9 @@ class Mailgun(object):
 
         response = requests.post(url, auth=('api', self.key), data=data)
         if response.status_code != 200:
-            raise APIError(response, self.api_error_template)
+            raise APIError(response)
 
-        current_app.logger.info(
-            'Mailgun sent to {0}'.format(data['to']))
+        current_app.logger.info('Mailgun sent to %s', data['to'])
 
 
 class LoggingHandler(logging.Handler):
@@ -241,13 +205,14 @@ class LoggingHandler(logging.Handler):
 class APIError(Exception):
     """Error response from the Mailgun server."""
 
-    def __init__(self, response, api_error_template):
+    def __init__(self, response):
         self.response = response
-        self.api_error_template = api_error_template
 
     def __str__(self):
-        return self.api_error_template.format(
-            method=self.response.request.method,
-            url=self.response.request.url,
-            status_code=self.response.status_code,
-            text=self.response.text)
+        return ((
+            'Mailgun API {method} at {url} failed '
+            'with status code {status_code}:\n{text}').format(
+                method=self.response.request.method,
+                url=self.response.request.url,
+                status_code=self.response.status_code,
+                text=self.response.text))

@@ -44,6 +44,7 @@ default_error_template = """\
 {% autoescape false -%}
 {{ message }}
 
+{% if request -%}
 {{ request.method }} {{ request.url }}
 {% for key, val in request.headers.items()|sort -%}
 {{ key }}: {{ val }}
@@ -54,6 +55,7 @@ Session: {{ key }}={{ val }}
 {% for key, val in request.form.items()|sort -%}
 {{ key }}={{ val }}
 {% endfor %}
+{% endif -%}
 {% endautoescape %}
 """
 

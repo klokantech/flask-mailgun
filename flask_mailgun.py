@@ -154,7 +154,7 @@ class Mailgun(object):
 
         if self.debug:
             data.setdefault('html', '(no HTML)')
-            current_app.logger.debug(debug_template, data)
+            current_app.logger.debug(self.debug_template, data)
             return
 
         url = self.api_url_template.format(domain=self.domain)
